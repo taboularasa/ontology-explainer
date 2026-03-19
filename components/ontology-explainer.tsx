@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight, RotateCcw, PanelRightOpen, PanelRightClose } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RotateCcw, PanelRightOpen, PanelRightClose, Hammer, FlaskConical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ForceGraph } from './force-graph'
 import { SourceDrawer } from './source-drawer'
+import { OntologyApplication } from './ontology-application'
 import {
   steps,
   triples,
@@ -14,7 +15,10 @@ import {
   type Layer,
 } from '@/lib/ontology-data'
 
+type TabId = 'build' | 'apply'
+
 export function OntologyExplainer() {
+  const [activeTab, setActiveTab] = useState<TabId>('build')
   const [currentStep, setCurrentStep] = useState(0)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [drawerOpen, setDrawerOpen] = useState(true)
@@ -87,18 +91,51 @@ export function OntologyExplainer() {
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
       <header className="border-b border-border px-4 py-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Multi-Layer Ontology Explainer
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Step through semantic triples to understand how SOPs, Software, and Training connect
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Multi-Layer Ontology Explainer
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeTab === 'build' 
+                ? 'Step through semantic triples to understand how SOPs, Software, and Training connect'
+                : 'See how ontologies enable validation and documentation generation'}
+            </p>
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex rounded-lg border border-border bg-muted p-1">
+            <button
+              onClick={() => setActiveTab('build')}
+              className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'build'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Hammer className="h-4 w-4" />
+              Build Ontology
+            </button>
+            <button
+              onClick={() => setActiveTab('apply')}
+              className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'apply'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <FlaskConical className="h-4 w-4" />
+              Apply Ontology
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden px-4 py-4">
+        {activeTab === 'apply' ? (
+          <OntologyApplication />
+        ) : (
         <div className="flex h-full gap-4">
           {/* Left: Graph and controls */}
           <div className={`flex flex-col transition-all duration-300 ${drawerOpen ? 'flex-1' : 'w-full'}`}>
@@ -282,6 +319,7 @@ export function OntologyExplainer() {
             )}
           </div>
         </div>
+        )}
       </main>
     </div>
   )
