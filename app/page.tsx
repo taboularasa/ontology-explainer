@@ -1,5 +1,5 @@
-import { OntologyDiagram } from "@/components/ontology-diagram"
+import { OntologyExplainer } from '@/components/ontology-explainer'
 
 export default function Page() {
-  return <OntologyDiagram />
+  return <OntologyExplainer />
 }
