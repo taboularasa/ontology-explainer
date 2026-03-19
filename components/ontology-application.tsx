@@ -81,9 +81,9 @@ export function OntologyApplication() {
   const typeConfig = stepTypeConfig[currentStepData.type]
 
   return (
-    <div className="flex h-full flex-col overflow-auto">
-      {/* Main content area - fixed height panels */}
-      <div className="flex gap-4" style={{ height: 'clamp(200px, 40vh, 360px)' }}>
+    <div className="flex h-full flex-col">
+      {/* Main content area - fills available space */}
+      <div className="flex min-h-0 flex-1 gap-4">
         {/* Left panel: Source / Before */}
         <div className="flex w-1/2 flex-col">
           <div className="mb-2 flex items-center gap-2">
@@ -109,8 +109,8 @@ export function OntologyApplication() {
         </div>
       </div>
 
-      {/* Controls and explanation */}
-      <div className="mt-4 rounded-lg border border-border bg-card p-4">
+      {/* Controls and explanation - sticky at bottom */}
+      <div className="mt-4 shrink-0 rounded-lg border border-border bg-card p-4">
         {/* Progress bar */}
         <div className="mb-3 flex items-center gap-2">
           <div className="flex-1">
