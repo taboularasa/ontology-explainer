@@ -90,10 +90,12 @@ export function ForceGraph({
       // Edges in opposite directions should curve in opposite directions
       let curveOffset = 0
       if (totalEdges > 1) {
-        const spacing = 35
-        // Determine direction: if source < target alphabetically, curve positive, else negative
-        const isForward = t.subjectId < t.objectId
-        curveOffset = isForward ? spacing : -spacing
+        const spacing = 40
+        // Compare to canonical sorted order to determine curve direction
+        const [first] = [t.subjectId, t.objectId].sort()
+        // If source is the "first" in sorted order, curve one way; otherwise curve the other
+        const isSourceFirst = t.subjectId === first
+        curveOffset = isSourceFirst ? spacing : -spacing
       }
       
       return {
@@ -392,18 +394,23 @@ export function ForceGraph({
         const target = d.target as SimNode
         const offset = d.curveOffset || 0
         
-        // Get boundary points (use center for control point calculation)
-        const [cx, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
-        
-        // Calculate boundary points toward control point for curved path
-        const [x1, y1] = getNodeBoundaryPoint(source, cx, cy)
-        const [x2, y2] = getNodeBoundaryPoint(target, cx, cy, -5)
-        
         if (offset === 0) {
-          // Straight line for single edges
+          // Straight line: boundary to boundary
+          const [x1, y1] = getNodeBoundaryPoint(source, target.x!, target.y!)
+          const [x2, y2] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
           return `M ${x1} ${y1} L ${x2} ${y2}`
         } else {
-          // Quadratic bezier for multiple edges
+          // Curved line: compute control point and adjust boundaries
+          const [cx, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
+          
+          // For source boundary, aim toward control point
+          const [x1, y1] = getNodeBoundaryPoint(source, cx, cy, 2)
+          
+          // For target boundary, compute where the curve actually arrives from
+          // At the end of a quadratic bezier Q(cx,cy,x2,y2), the tangent is from control point to end
+          // So the arrow should point from control point direction
+          const [x2, y2] = getNodeBoundaryPoint(target, cx, cy, -3)
+          
           return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
         }
       })
