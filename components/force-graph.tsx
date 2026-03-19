@@ -10,6 +10,8 @@ interface SimNode extends d3.SimulationNodeDatum {
   label: string
   layer: Layer
   isNew?: boolean
+  width?: number
+  height?: number
 }
 
 interface SimLink extends d3.SimulationLinkDatum<SimNode> {
@@ -139,7 +141,7 @@ export function ForceGraph({
           .append('marker')
           .attr('id', `arrow-${layer}`)
           .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 28)
+          .attr('refX', 10)
           .attr('refY', 0)
           .attr('markerWidth', 6)
           .attr('markerHeight', 6)
@@ -153,7 +155,7 @@ export function ForceGraph({
           .append('marker')
           .attr('id', `arrow-${layer}-highlight`)
           .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 28)
+          .attr('refX', 10)
           .attr('refY', 0)
           .attr('markerWidth', 8)
           .attr('markerHeight', 8)
@@ -290,25 +292,81 @@ export function ForceGraph({
       .attr('font-weight', 500)
       .text((d) => d.label)
 
-    // Size rectangles based on text
-    node.each(function () {
+    // Size rectangles based on text and store dimensions on node data
+    node.each(function (d) {
       const g = d3.select(this)
       const text = g.select('text')
       const bbox = (text.node() as SVGTextElement).getBBox()
+      const nodeWidth = bbox.width + 24
+      const nodeHeight = bbox.height + 16
+      d.width = nodeWidth
+      d.height = nodeHeight
       g.select('rect')
-        .attr('x', bbox.x - 12)
-        .attr('y', bbox.y - 8)
-        .attr('width', bbox.width + 24)
-        .attr('height', bbox.height + 16)
+        .attr('x', -nodeWidth / 2)
+        .attr('y', -nodeHeight / 2)
+        .attr('width', nodeWidth)
+        .attr('height', nodeHeight)
     })
+
+    // Helper to find intersection of line with rectangle boundary
+    const getNodeBoundaryPoint = (
+      node: SimNode,
+      otherX: number,
+      otherY: number
+    ): [number, number] => {
+      const cx = node.x!
+      const cy = node.y!
+      const w = (node.width || 80) / 2 + 4 // half width + padding
+      const h = (node.height || 32) / 2 + 4 // half height + padding
+
+      const dx = otherX - cx
+      const dy = otherY - cy
+
+      if (dx === 0 && dy === 0) return [cx, cy]
+
+      // Find intersection with rectangle
+      const absDx = Math.abs(dx)
+      const absDy = Math.abs(dy)
+
+      let scale: number
+      if (absDx * h > absDy * w) {
+        // Intersects left or right edge
+        scale = w / absDx
+      } else {
+        // Intersects top or bottom edge
+        scale = h / absDy
+      }
+
+      return [cx + dx * scale, cy + dy * scale]
+    }
 
     // Animation tick
     simulation.on('tick', () => {
       link
-        .attr('x1', (d) => (d.source as SimNode).x!)
-        .attr('y1', (d) => (d.source as SimNode).y!)
-        .attr('x2', (d) => (d.target as SimNode).x!)
-        .attr('y2', (d) => (d.target as SimNode).y!)
+        .attr('x1', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const [x] = getNodeBoundaryPoint(source, target.x!, target.y!)
+          return x
+        })
+        .attr('y1', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const [, y] = getNodeBoundaryPoint(source, target.x!, target.y!)
+          return y
+        })
+        .attr('x2', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const [x] = getNodeBoundaryPoint(target, source.x!, source.y!)
+          return x
+        })
+        .attr('y2', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const [, y] = getNodeBoundaryPoint(target, source.x!, source.y!)
+          return y
+        })
 
       edgeLabel
         .attr('x', (d) => ((d.source as SimNode).x! + (d.target as SimNode).x!) / 2)
