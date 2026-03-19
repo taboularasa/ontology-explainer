@@ -81,7 +81,7 @@ export function OntologyApplication() {
   const typeConfig = stepTypeConfig[currentStepData.type]
 
   return (
-    <div className="absolute inset-0 flex flex-col">
+    <div className="absolute inset-0 flex flex-col px-4 py-4">
       {/* Main content area - fills available space */}
       <div className="flex min-h-0 flex-1 gap-4">
         {/* Left panel: Source / Before */}

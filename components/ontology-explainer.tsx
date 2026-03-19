@@ -132,17 +132,17 @@ export function OntologyExplainer() {
       </header>
 
       {/* Main content */}
-      <main className="relative flex-1 overflow-hidden px-4 py-4">
+      <main className="relative flex-1 overflow-hidden">
         {activeTab === 'apply' ? (
           <OntologyApplication />
         ) : (
-        <div className="flex h-full gap-4">
-          {/* Left: Graph and controls */}
-          <div className={`flex flex-col transition-all duration-300 ${drawerOpen ? 'flex-1' : 'w-full'}`}>
-            {/* Graph container */}
+        <div className="absolute inset-0 flex flex-col px-4 py-4">
+          {/* Content area: Graph + Source drawer side by side */}
+          <div className="flex min-h-0 flex-1 gap-4">
+            {/* Left: Graph */}
             <div
               ref={containerRef}
-              className="relative flex-1 overflow-hidden rounded-lg border border-border bg-card"
+              className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"
             >
               {dimensions.width > 0 && (
                 <ForceGraph
@@ -193,130 +193,132 @@ export function OntologyExplainer() {
               </Button>
             </div>
 
-            {/* Controls and explanation */}
-            <div className="mt-4 rounded-lg border border-border bg-card p-4">
-              {/* Progress bar */}
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex-1">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-foreground transition-all duration-300"
-                      style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
-                    />
-                  </div>
+            {/* Right: Source drawer - full height */}
+            <div
+              className={`flex shrink-0 flex-col transition-all duration-300 ${
+                drawerOpen ? 'w-[28rem] opacity-100' : 'w-0 overflow-hidden opacity-0'
+              }`}
+            >
+              {drawerOpen && currentStepData.source && (
+                <div className="min-h-0 flex-1">
+                  <SourceDrawer source={currentStepData.source} />
                 </div>
-                <span className="text-sm tabular-nums text-muted-foreground">
-                  {currentStep + 1} / {totalSteps}
-                </span>
-              </div>
-
-              {/* Step info */}
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-foreground">
-                  {currentStepData.title}
-                </h2>
-
-                {highlightedTriple && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-sm">
-                    <span
-                      className="rounded px-2 py-1"
-                      style={{
-                        backgroundColor: layerColors[highlightedTriple.layer].fill,
-                        color: layerColors[highlightedTriple.layer].text,
-                        border: `1px solid ${layerColors[highlightedTriple.layer].stroke}`,
-                      }}
-                    >
-                      {nodes.find((n) => n.id === highlightedTriple.subjectId)?.label}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {highlightedTriple.predicate}
-                    </span>
-                    <span
-                      className="rounded px-2 py-1"
-                      style={{
-                        backgroundColor: layerColors[highlightedTriple.layer].fill,
-                        color: layerColors[highlightedTriple.layer].text,
-                        border: `1px solid ${layerColors[highlightedTriple.layer].stroke}`,
-                      }}
-                    >
-                      {nodes.find((n) => n.id === highlightedTriple.objectId)?.label}
-                    </span>
-                  </div>
-                )}
-
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  {currentStepData.description}
-                </p>
-              </div>
-
-              {/* Navigation */}
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={reset}
-                  disabled={currentStep === 0}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reset
-                </Button>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={goPrev}
-                    disabled={currentStep === 0}
-                    aria-label="Previous step"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-
-                  {/* Step dots */}
-                  <div className="flex gap-1 px-2">
-                    {steps.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentStep(index)}
-                        className={`h-2 w-2 rounded-full transition-all ${
-                          index === currentStep
-                            ? 'scale-125 bg-foreground'
-                            : index < currentStep
-                              ? 'bg-foreground/40'
-                              : 'bg-muted-foreground/30'
-                        }`}
-                        aria-label={`Go to step ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={goNext}
-                    disabled={currentStep === totalSteps - 1}
-                    aria-label="Next step"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Arrow keys to navigate
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Right: Source drawer */}
-          <div
-            className={`shrink-0 transition-all duration-300 ${
-              drawerOpen ? 'w-[28rem] opacity-100' : 'w-0 overflow-hidden opacity-0'
-            }`}
-          >
-            {drawerOpen && currentStepData.source && (
-              <SourceDrawer source={currentStepData.source} />
-            )}
+          {/* Controls and explanation - fixed at bottom */}
+          <div className="mt-4 shrink-0 rounded-lg border border-border bg-card p-4">
+            {/* Progress bar */}
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex-1">
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-foreground transition-all duration-300"
+                    style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm tabular-nums text-muted-foreground">
+                {currentStep + 1} / {totalSteps}
+              </span>
+            </div>
+
+            {/* Step info */}
+            <div className="mb-4">
+              <h2 className="text-base font-semibold text-foreground">
+                {currentStepData.title}
+              </h2>
+
+              {highlightedTriple && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-sm">
+                  <span
+                    className="rounded px-2 py-1"
+                    style={{
+                      backgroundColor: layerColors[highlightedTriple.layer].fill,
+                      color: layerColors[highlightedTriple.layer].text,
+                      border: `1px solid ${layerColors[highlightedTriple.layer].stroke}`,
+                    }}
+                  >
+                    {nodes.find((n) => n.id === highlightedTriple.subjectId)?.label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {highlightedTriple.predicate}
+                  </span>
+                  <span
+                    className="rounded px-2 py-1"
+                    style={{
+                      backgroundColor: layerColors[highlightedTriple.layer].fill,
+                      color: layerColors[highlightedTriple.layer].text,
+                      border: `1px solid ${layerColors[highlightedTriple.layer].stroke}`,
+                    }}
+                  >
+                    {nodes.find((n) => n.id === highlightedTriple.objectId)?.label}
+                  </span>
+                </div>
+              )}
+
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                {currentStepData.description}
+              </p>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reset}
+                disabled={currentStep === 0}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goPrev}
+                  disabled={currentStep === 0}
+                  aria-label="Previous step"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                {/* Step dots */}
+                <div className="flex gap-1 px-2">
+                  {steps.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentStep(index)}
+                      className={`h-2 w-2 rounded-full transition-all ${
+                        index === currentStep
+                          ? 'scale-125 bg-foreground'
+                          : index < currentStep
+                            ? 'bg-foreground/40'
+                            : 'bg-muted-foreground/30'
+                      }`}
+                      aria-label={`Go to step ${index + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goNext}
+                  disabled={currentStep === totalSteps - 1}
+                  aria-label="Next step"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Arrow keys to navigate
+              </div>
+            </div>
           </div>
         </div>
         )}
