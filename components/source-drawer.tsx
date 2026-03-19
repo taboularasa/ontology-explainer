@@ -55,7 +55,7 @@ export function SourceDrawer({ source }: SourceDrawerProps) {
                     {lineNumber}
                   </span>
                   <span
-                    className={`flex-1 whitespace-pre px-3 py-0.5 font-mono ${
+                    className={`flex-1 whitespace-pre-wrap break-words px-3 py-0.5 font-mono ${
                       isHighlighted
                         ? 'text-foreground'
                         : 'text-muted-foreground'

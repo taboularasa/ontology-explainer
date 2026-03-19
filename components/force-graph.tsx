@@ -25,6 +25,7 @@ interface ForceGraphProps {
   highlightTripleId: string | null
   width: number
   height: number
+  onCenterRequest?: (centerFn: () => void) => void
 }
 
 export function ForceGraph({
@@ -35,9 +36,12 @@ export function ForceGraph({
   height,
 }: ForceGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const gRef = useRef<SVGGElement | null>(null)
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null)
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const prevNodesRef = useRef<Set<string>>(new Set())
   const prevLinksRef = useRef<Set<string>>(new Set())
+  const simNodesRef = useRef<SimNode[]>([])
 
   const getLayerTargetX = useCallback(
     (layer: Layer) => {
@@ -117,8 +121,26 @@ export function ForceGraph({
     // Reheat simulation
     simulation.alpha(0.5).restart()
 
+    // Store nodes ref for centering
+    simNodesRef.current = simNodes
+
     // Clear existing elements
     svg.selectAll('*').remove()
+
+    // Create main group for zoom/pan
+    const g = svg.append('g')
+    gRef.current = g.node()
+
+    // Setup zoom behavior
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.3, 3])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform)
+      })
+
+    svg.call(zoom)
+    zoomRef.current = zoom
 
     // Add defs for arrow markers and filters
     const defs = svg.append('defs')
@@ -172,10 +194,10 @@ export function ForceGraph({
     feMerge.append('feMergeNode').attr('in', 'coloredBlur')
     feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
 
-    // Create container groups
-    const linkGroup = svg.append('g').attr('class', 'links')
-    const labelGroup = svg.append('g').attr('class', 'labels')
-    const nodeGroup = svg.append('g').attr('class', 'nodes')
+    // Create container groups inside the zoomable group
+    const linkGroup = g.append('g').attr('class', 'links')
+    const labelGroup = g.append('g').attr('class', 'labels')
+    const nodeGroup = g.append('g').attr('class', 'nodes')
 
     // Draw links
     const link = linkGroup
@@ -296,6 +318,43 @@ export function ForceGraph({
     }
   }, [nodes, triples, highlightTripleId, width, height, getLayerTargetX])
 
+  // Center on highlighted edge when it changes
+  useEffect(() => {
+    if (!highlightTripleId || !svgRef.current || !zoomRef.current) return
+
+    const triple = triples.find((t) => t.id === highlightTripleId)
+    if (!triple) return
+
+    // Wait for simulation to settle a bit
+    const timer = setTimeout(() => {
+      const sourceNode = simNodesRef.current.find((n) => n.id === triple.subjectId)
+      const targetNode = simNodesRef.current.find((n) => n.id === triple.objectId)
+
+      if (!sourceNode?.x || !targetNode?.x || !sourceNode?.y || !targetNode?.y) return
+
+      // Calculate center of the edge
+      const centerX = (sourceNode.x + targetNode.x) / 2
+      const centerY = (sourceNode.y + targetNode.y) / 2
+
+      // Calculate transform to center on this point
+      const svg = d3.select(svgRef.current!)
+      const zoom = zoomRef.current!
+      
+      const scale = 1.2 // Zoom in slightly when centering
+      const transform = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-centerX, -centerY)
+
+      svg.transition()
+        .duration(500)
+        .ease(d3.easeCubicOut)
+        .call(zoom.transform, transform)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [highlightTripleId, triples, width, height])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -311,7 +370,7 @@ export function ForceGraph({
       ref={svgRef}
       width={width}
       height={height}
-      className="bg-background"
+      className="cursor-grab bg-background active:cursor-grabbing"
     />
   )
 }
