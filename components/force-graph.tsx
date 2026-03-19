@@ -124,8 +124,64 @@ export function ForceGraph({
     // Store nodes ref for centering
     simNodesRef.current = simNodes
 
-    // Clear existing elements
-    svg.selectAll('*').remove()
+    // Clear existing elements except defs
+    svg.selectAll('g').remove()
+
+    // Add defs for arrow markers and filters (only once, outside zoomable group)
+    let defs = svg.select<SVGDefsElement>('defs')
+    if (defs.empty()) {
+      defs = svg.append('defs')
+      
+      // Arrow markers for each layer
+      const layers: Layer[] = ['sop', 'software', 'training']
+      layers.forEach((layer) => {
+        defs
+          .append('marker')
+          .attr('id', `arrow-${layer}`)
+          .attr('viewBox', '0 -5 10 10')
+          .attr('refX', 28)
+          .attr('refY', 0)
+          .attr('markerWidth', 6)
+          .attr('markerHeight', 6)
+          .attr('orient', 'auto')
+          .append('path')
+          .attr('d', 'M0,-5L10,0L0,5')
+          .attr('fill', layerColors[layer].stroke)
+
+        // Highlighted version
+        defs
+          .append('marker')
+          .attr('id', `arrow-${layer}-highlight`)
+          .attr('viewBox', '0 -5 10 10')
+          .attr('refX', 28)
+          .attr('refY', 0)
+          .attr('markerWidth', 8)
+          .attr('markerHeight', 8)
+          .attr('orient', 'auto')
+          .append('path')
+          .attr('d', 'M0,-5L10,0L0,5')
+          .attr('fill', layerColors[layer].stroke)
+      })
+
+      // Glow filter for highlights - use filterUnits="userSpaceOnUse" to avoid clipping
+      const filter = defs
+        .append('filter')
+        .attr('id', 'glow')
+        .attr('filterUnits', 'userSpaceOnUse')
+        .attr('x', '-100%')
+        .attr('y', '-100%')
+        .attr('width', '300%')
+        .attr('height', '300%')
+
+      filter
+        .append('feGaussianBlur')
+        .attr('stdDeviation', '4')
+        .attr('result', 'coloredBlur')
+
+      const feMerge = filter.append('feMerge')
+      feMerge.append('feMergeNode').attr('in', 'coloredBlur')
+      feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+    }
 
     // Create main group for zoom/pan
     const g = svg.append('g')
@@ -141,58 +197,6 @@ export function ForceGraph({
 
     svg.call(zoom)
     zoomRef.current = zoom
-
-    // Add defs for arrow markers and filters
-    const defs = svg.append('defs')
-
-    // Arrow markers for each layer
-    const layers: Layer[] = ['sop', 'software', 'training']
-    layers.forEach((layer) => {
-      defs
-        .append('marker')
-        .attr('id', `arrow-${layer}`)
-        .attr('viewBox', '0 -5 10 10')
-        .attr('refX', 28)
-        .attr('refY', 0)
-        .attr('markerWidth', 6)
-        .attr('markerHeight', 6)
-        .attr('orient', 'auto')
-        .append('path')
-        .attr('d', 'M0,-5L10,0L0,5')
-        .attr('fill', layerColors[layer].stroke)
-
-      // Highlighted version
-      defs
-        .append('marker')
-        .attr('id', `arrow-${layer}-highlight`)
-        .attr('viewBox', '0 -5 10 10')
-        .attr('refX', 28)
-        .attr('refY', 0)
-        .attr('markerWidth', 8)
-        .attr('markerHeight', 8)
-        .attr('orient', 'auto')
-        .append('path')
-        .attr('d', 'M0,-5L10,0L0,5')
-        .attr('fill', layerColors[layer].stroke)
-    })
-
-    // Glow filter for highlights
-    const filter = defs
-      .append('filter')
-      .attr('id', 'glow')
-      .attr('x', '-50%')
-      .attr('y', '-50%')
-      .attr('width', '200%')
-      .attr('height', '200%')
-
-    filter
-      .append('feGaussianBlur')
-      .attr('stdDeviation', '3')
-      .attr('result', 'coloredBlur')
-
-    const feMerge = filter.append('feMerge')
-    feMerge.append('feMergeNode').attr('in', 'coloredBlur')
-    feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
 
     // Create container groups inside the zoomable group
     const linkGroup = g.append('g').attr('class', 'links')
