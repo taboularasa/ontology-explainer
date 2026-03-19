@@ -1,51 +1,209 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
-import * as d3 from 'd3'
-import type { OntologyNode, Triple, Layer } from '@/lib/ontology-data'
-import { layerColors } from '@/lib/ontology-data'
+import '@xyflow/react/dist/style.css'
 
-interface SimNode extends d3.SimulationNodeDatum {
-  id: string
-  label: string
-  layer: Layer
-  isNew?: boolean
-  width?: number
-  height?: number
-}
-
-interface SimLink extends d3.SimulationLinkDatum<SimNode> {
-  id: string
-  predicate: string
-  layer: Layer
-  isNew?: boolean
-  curveOffset?: number // offset for curved paths when multiple edges between same nodes
-}
+import { useMemo, useEffect, useRef, useCallback } from 'react'
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  useNodesInitialized,
+  type Node,
+  type Edge,
+  type NodeTypes,
+  type EdgeTypes,
+  ConnectionLineType,
+} from '@xyflow/react'
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceX,
+  forceY,
+  forceCollide,
+  type SimulationNodeDatum,
+  type SimulationLinkDatum,
+} from 'd3-force'
+import type { OntologyNode as OntologyNodeType, Triple, Layer } from '@/lib/ontology-data'
+import { OntologyNode, type OntologyNodeData } from './ontology-node'
+import { OntologyEdge, ONTOLOGY_EDGE_MARKER, type OntologyEdgeData } from './ontology-edge'
 
 interface ForceGraphProps {
-  nodes: OntologyNode[]
+  nodes: OntologyNodeType[]
   triples: Triple[]
   highlightTripleId: string | null
   width: number
   height: number
-  onCenterRequest?: (centerFn: () => void) => void
 }
 
-export function ForceGraph({
-  nodes,
+const nodeTypes: NodeTypes = {
+  ontology: OntologyNode,
+}
+
+const edgeTypes: EdgeTypes = {
+  ontology: OntologyEdge,
+}
+
+interface SimNode extends SimulationNodeDatum {
+  id: string
+  rfWidth: number
+  rfHeight: number
+}
+
+interface SimLink extends SimulationLinkDatum<SimNode> {
+  id: string
+}
+
+function computeParallelEdgeIndices(triples: Triple[]) {
+  const pairCounts = new Map<string, number>()
+  const pairIndices = new Map<string, number>()
+
+  triples.forEach((t) => {
+    const pairKey = [t.subjectId, t.objectId].sort().join('--')
+    pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1)
+  })
+
+  return triples.map((t) => {
+    const pairKey = [t.subjectId, t.objectId].sort().join('--')
+    const total = pairCounts.get(pairKey) || 1
+    const idx = pairIndices.get(pairKey) || 0
+    pairIndices.set(pairKey, idx + 1)
+    return { edgeIndex: idx, totalParallelEdges: total }
+  })
+}
+
+function toRFNodes(
+  ontologyNodes: OntologyNodeType[],
+  triples: Triple[],
+  highlightTripleId: string | null,
+  width: number,
+  height: number
+): Node[] {
+  const highlightTriple = triples.find((t) => t.id === highlightTripleId)
+  const highlightedNodeIds = highlightTriple
+    ? new Set([highlightTriple.subjectId, highlightTriple.objectId])
+    : new Set<string>()
+
+  return ontologyNodes.map((n) => ({
+    id: n.id,
+    type: 'ontology',
+    position: {
+      x: Math.random() * width * 0.5 + width * 0.25,
+      y: Math.random() * height * 0.5 + height * 0.25,
+    },
+    data: {
+      label: n.label,
+      layer: n.layer,
+      highlighted: highlightedNodeIds.has(n.id),
+    } satisfies OntologyNodeData,
+  }))
+}
+
+function toRFEdges(
+  triples: Triple[],
+  highlightTripleId: string | null,
+  parallelInfo: { edgeIndex: number; totalParallelEdges: number }[]
+): Edge[] {
+  return triples.map((t, i) => ({
+    id: t.id,
+    source: t.subjectId,
+    target: t.objectId,
+    type: 'ontology',
+    markerEnd: ONTOLOGY_EDGE_MARKER(t.layer),
+    data: {
+      predicate: t.predicate,
+      layer: t.layer,
+      highlighted: t.id === highlightTripleId,
+      edgeIndex: parallelInfo[i].edgeIndex,
+      totalParallelEdges: parallelInfo[i].totalParallelEdges,
+    } satisfies OntologyEdgeData,
+  }))
+}
+
+function FlowInner({
+  nodes: ontologyNodes,
   triples,
   highlightTripleId,
   width,
   height,
 }: ForceGraphProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const gRef = useRef<SVGGElement | null>(null)
-  const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null)
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
-  const prevNodesRef = useRef<Set<string>>(new Set())
-  const prevLinksRef = useRef<Set<string>>(new Set())
-  const simNodesRef = useRef<SimNode[]>([])
+  const { fitView, getNodes: getRFNodes } = useReactFlow()
+  const initialized = useNodesInitialized()
+  const simRef = useRef<ReturnType<typeof forceSimulation<SimNode>> | null>(null)
+  const animRef = useRef<number | null>(null)
+  const prevNodeKeyRef = useRef<string>('')
 
+  const parallelInfo = useMemo(
+    () => computeParallelEdgeIndices(triples),
+    [triples]
+  )
+
+  const initialNodes = useMemo(
+    () => toRFNodes(ontologyNodes, triples, highlightTripleId, width, height),
+    [ontologyNodes, triples, highlightTripleId, width, height]
+  )
+
+  const initialEdges = useMemo(
+    () => toRFEdges(triples, highlightTripleId, parallelInfo),
+    [triples, highlightTripleId, parallelInfo]
+  )
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+
+  // Sync external data -> internal RF state when ontology data changes
+  const nodeKey = ontologyNodes.map((n) => n.id).sort().join(',')
+  const tripleKey = triples.map((t) => t.id).join(',')
+  const dataKey = `${nodeKey}|${tripleKey}|${highlightTripleId}`
+  const prevDataKeyRef = useRef(dataKey)
+
+  useEffect(() => {
+    if (dataKey === prevDataKeyRef.current) return
+    prevDataKeyRef.current = dataKey
+
+    setEdges(toRFEdges(triples, highlightTripleId, parallelInfo))
+
+    // For nodes: preserve positions of existing nodes, add new ones
+    const currentNodes = getRFNodes()
+    const positionMap = new Map<string, { x: number; y: number }>()
+    currentNodes.forEach((n) => positionMap.set(n.id, n.position))
+
+    const highlightTriple = triples.find((t) => t.id === highlightTripleId)
+    const highlightedNodeIds = highlightTriple
+      ? new Set([highlightTriple.subjectId, highlightTriple.objectId])
+      : new Set<string>()
+
+    const updatedNodes = ontologyNodes.map((n) => ({
+      id: n.id,
+      type: 'ontology' as const,
+      position: positionMap.get(n.id) ?? {
+        x: Math.random() * width * 0.5 + width * 0.25,
+        y: Math.random() * height * 0.5 + height * 0.25,
+      },
+      data: {
+        label: n.label,
+        layer: n.layer,
+        highlighted: highlightedNodeIds.has(n.id),
+      } satisfies OntologyNodeData,
+    }))
+
+    setNodes(updatedNodes)
+  }, [
+    dataKey,
+    ontologyNodes,
+    triples,
+    highlightTripleId,
+    parallelInfo,
+    width,
+    height,
+    setNodes,
+    setEdges,
+    getRFNodes,
+  ])
+
+  // Run force simulation when nodes are initialized or change
   const getLayerTargetX = useCallback(
     (layer: Layer) => {
       switch (layer) {
@@ -63,437 +221,163 @@ export function ForceGraph({
   )
 
   useEffect(() => {
-    if (!svgRef.current || width === 0 || height === 0) return
+    if (!initialized) return
 
-    const svg = d3.select(svgRef.current)
+    const rfNodes = getRFNodes()
+    if (rfNodes.length === 0) return
 
-    // Prepare simulation data
-    const simNodes: SimNode[] = nodes.map((n) => ({
-      ...n,
-      isNew: !prevNodesRef.current.has(n.id),
+    // Stop any existing simulation
+    if (simRef.current) simRef.current.stop()
+    if (animRef.current) cancelAnimationFrame(animRef.current)
+
+    const layerMap = new Map<string, Layer>()
+    ontologyNodes.forEach((n) => layerMap.set(n.id, n.layer))
+
+    const simNodes: SimNode[] = rfNodes.map((node) => ({
+      id: node.id,
+      x: node.position.x + (node.measured?.width ?? 120) / 2,
+      y: node.position.y + (node.measured?.height ?? 40) / 2,
+      rfWidth: node.measured?.width ?? 120,
+      rfHeight: node.measured?.height ?? 40,
     }))
 
-    // Calculate curve offsets for edges between same node pairs
-    const edgePairCounts = new Map<string, number>()
-    
-    triples.forEach((t) => {
-      // Create a canonical key for node pair (sorted to handle both directions)
-      const pairKey = [t.subjectId, t.objectId].sort().join('--')
-      edgePairCounts.set(pairKey, (edgePairCounts.get(pairKey) || 0) + 1)
-    })
-
-    const simLinks: SimLink[] = triples.map((t) => {
-      const pairKey = [t.subjectId, t.objectId].sort().join('--')
-      const totalEdges = edgePairCounts.get(pairKey) || 1
-      
-      // Calculate offset based on edge direction
-      // Edges in opposite directions should curve in opposite directions
-      let curveOffset = 0
-      if (totalEdges > 1) {
-        const spacing = 40
-        // Compare to canonical sorted order to determine curve direction
-        const [first] = [t.subjectId, t.objectId].sort()
-        // If source is the "first" in sorted order, curve one way; otherwise curve the other
-        const isSourceFirst = t.subjectId === first
-        curveOffset = isSourceFirst ? spacing : -spacing
-      }
-      
-      return {
+    const nodeIdSet = new Set(rfNodes.map((n) => n.id))
+    const simLinks: SimLink[] = triples
+      .filter((t) => nodeIdSet.has(t.subjectId) && nodeIdSet.has(t.objectId))
+      .map((t) => ({
         id: t.id,
         source: t.subjectId,
         target: t.objectId,
-        predicate: t.predicate,
-        layer: t.layer,
-        isNew: !prevLinksRef.current.has(t.id),
-        curveOffset,
-      }
-    })
+      }))
 
-    // Update previous sets
-    prevNodesRef.current = new Set(nodes.map((n) => n.id))
-    prevLinksRef.current = new Set(triples.map((t) => t.id))
-
-    // Create or update simulation
-    if (!simulationRef.current) {
-      simulationRef.current = d3
-        .forceSimulation<SimNode>()
-        .force(
-          'link',
-          d3
-            .forceLink<SimNode, SimLink>()
-            .id((d) => d.id)
-            .distance(140)
-            .strength(0.5)
-        )
-        .force('charge', d3.forceManyBody().strength(-500))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(60))
-        .force(
-          'x',
-          d3
-            .forceX<SimNode>()
-            .x((d) => getLayerTargetX(d.layer))
-            .strength(0.15)
-        )
-        .force(
-          'y',
-          d3
-            .forceY<SimNode>()
-            .y(height / 2)
-            .strength(0.05)
-        )
-    }
-
-    const simulation = simulationRef.current
-    simulation.nodes(simNodes)
-    ;(simulation.force('link') as d3.ForceLink<SimNode, SimLink>).links(simLinks)
-
-    // Reheat simulation
-    simulation.alpha(0.5).restart()
-
-    // Store nodes ref for centering
-    simNodesRef.current = simNodes
-
-    // Clear existing elements except defs
-    svg.selectAll('g').remove()
-
-    // Add defs for arrow markers and filters (only once, outside zoomable group)
-    let defs = svg.select<SVGDefsElement>('defs')
-    if (defs.empty()) {
-      defs = svg.append('defs')
-      
-      // Arrow markers for each layer
-      const layers: Layer[] = ['sop', 'software', 'training']
-      layers.forEach((layer) => {
-        defs
-          .append('marker')
-          .attr('id', `arrow-${layer}`)
-          .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 1)
-          .attr('refY', 0)
-          .attr('markerWidth', 6)
-          .attr('markerHeight', 6)
-          .attr('orient', 'auto')
-          .append('path')
-          .attr('d', 'M0,-5L10,0L0,5')
-          .attr('fill', layerColors[layer].stroke)
-
-        // Highlighted version
-        defs
-          .append('marker')
-          .attr('id', `arrow-${layer}-highlight`)
-          .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 1)
-          .attr('refY', 0)
-          .attr('markerWidth', 8)
-          .attr('markerHeight', 8)
-          .attr('orient', 'auto')
-          .append('path')
-          .attr('d', 'M0,-5L10,0L0,5')
-          .attr('fill', layerColors[layer].stroke)
-      })
-
-      // Glow filter for highlights - use filterUnits="userSpaceOnUse" to avoid clipping
-      const filter = defs
-        .append('filter')
-        .attr('id', 'glow')
-        .attr('filterUnits', 'userSpaceOnUse')
-        .attr('x', '-100%')
-        .attr('y', '-100%')
-        .attr('width', '300%')
-        .attr('height', '300%')
-
-      filter
-        .append('feGaussianBlur')
-        .attr('stdDeviation', '4')
-        .attr('result', 'coloredBlur')
-
-      const feMerge = filter.append('feMerge')
-      feMerge.append('feMergeNode').attr('in', 'coloredBlur')
-      feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
-    }
-
-    // Create main group for zoom/pan
-    const g = svg.append('g')
-    gRef.current = g.node()
-
-    // Setup zoom behavior
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 3])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform)
-      })
-
-    svg.call(zoom)
-    zoomRef.current = zoom
-
-    // Create container groups inside the zoomable group
-    const linkGroup = g.append('g').attr('class', 'links')
-    const labelGroup = g.append('g').attr('class', 'labels')
-    const nodeGroup = g.append('g').attr('class', 'nodes')
-
-    // Draw links as curved paths
-    const link = linkGroup
-      .selectAll('path')
-      .data(simLinks)
-      .join('path')
-      .attr('fill', 'none')
-      .attr('stroke', (d) => layerColors[d.layer].stroke)
-      .attr('stroke-width', (d) => (d.id === highlightTripleId ? 3 : 1.5))
-      .attr('stroke-opacity', (d) => (d.id === highlightTripleId ? 1 : 0.6))
-      .attr('marker-end', (d) =>
-        d.id === highlightTripleId
-          ? `url(#arrow-${d.layer}-highlight)`
-          : `url(#arrow-${d.layer})`
+    const sim = forceSimulation<SimNode>(simNodes)
+      .force(
+        'link',
+        forceLink<SimNode, SimLink>(simLinks)
+          .id((d) => d.id)
+          .distance(140)
+          .strength(0.5)
       )
-      .attr('filter', (d) => (d.id === highlightTripleId ? 'url(#glow)' : null))
+      .force('charge', forceManyBody().strength(-500))
+      .force(
+        'collide',
+        forceCollide<SimNode>().radius(
+          (d) => Math.max(d.rfWidth, d.rfHeight) / 2 + 20
+        )
+      )
+      .force(
+        'x',
+        forceX<SimNode>()
+          .x((d) => getLayerTargetX(layerMap.get(d.id) ?? 'sop'))
+          .strength(0.15)
+      )
+      .force(
+        'y',
+        forceY<SimNode>().y(height / 2).strength(0.05)
+      )
+      .stop()
 
-    // Draw edge labels
-    const edgeLabel = labelGroup
-      .selectAll('text')
-      .data(simLinks)
-      .join('text')
-      .attr('font-size', (d) => (d.id === highlightTripleId ? 12 : 10))
-      .attr('font-family', 'var(--font-mono)')
-      .attr('fill', (d) => layerColors[d.layer].text)
-      .attr('text-anchor', 'middle')
-      .attr('dy', -8)
-      .attr('opacity', (d) => (d.id === highlightTripleId ? 1 : 0.7))
-      .attr('font-weight', (d) => (d.id === highlightTripleId ? 600 : 400))
-      .text((d) => d.predicate)
+    simRef.current = sim
 
-    // Draw nodes
-    const node = nodeGroup
-      .selectAll('g')
-      .data(simNodes)
-      .join('g')
-      .attr('cursor', 'grab')
-      .call(
-        d3
-          .drag<SVGGElement, SimNode>()
-          .on('start', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart()
-            d.fx = d.x
-            d.fy = d.y
-          })
-          .on('drag', (event, d) => {
-            d.fx = event.x
-            d.fy = event.y
-          })
-          .on('end', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0)
-            d.fx = null
-            d.fy = null
-          })
+    const isNewGraph = nodeKey !== prevNodeKeyRef.current
+    prevNodeKeyRef.current = nodeKey
+
+    sim.alpha(isNewGraph ? 0.8 : 0.3)
+
+    let running = true
+    const tick = () => {
+      if (!running) return
+      sim.tick()
+
+      const simNodesNow = sim.nodes()
+      setNodes((prev) =>
+        prev.map((node, i) => {
+          const sn = simNodesNow[i]
+          if (!sn) return node
+          return {
+            ...node,
+            position: {
+              x: (sn.x ?? 0) - (node.measured?.width ?? 120) / 2,
+              y: (sn.y ?? 0) - (node.measured?.height ?? 40) / 2,
+            },
+          }
+        })
       )
 
-    // Node rectangles
-    node
-      .append('rect')
-      .attr('rx', 8)
-      .attr('ry', 8)
-      .attr('fill', (d) => layerColors[d.layer].fill)
-      .attr('stroke', (d) => layerColors[d.layer].stroke)
-      .attr('stroke-width', (d) => {
-        const triple = triples.find((t) => t.id === highlightTripleId)
-        if (triple && (triple.subjectId === d.id || triple.objectId === d.id)) {
-          return 3
-        }
-        return 1.5
-      })
-      .attr('filter', (d) => {
-        const triple = triples.find((t) => t.id === highlightTripleId)
-        if (triple && (triple.subjectId === d.id || triple.objectId === d.id)) {
-          return 'url(#glow)'
-        }
-        return null
-      })
-
-    // Node labels
-    node
-      .append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', 4)
-      .attr('font-size', 11)
-      .attr('font-family', 'var(--font-sans)')
-      .attr('fill', (d) => layerColors[d.layer].text)
-      .attr('font-weight', 500)
-      .text((d) => d.label)
-
-    // Size rectangles based on text and store dimensions on node data
-    node.each(function (d) {
-      const g = d3.select(this)
-      const text = g.select('text')
-      const bbox = (text.node() as SVGTextElement).getBBox()
-      const nodeWidth = bbox.width + 24
-      const nodeHeight = bbox.height + 16
-      d.width = nodeWidth
-      d.height = nodeHeight
-      g.select('rect')
-        .attr('x', -nodeWidth / 2)
-        .attr('y', -nodeHeight / 2)
-        .attr('width', nodeWidth)
-        .attr('height', nodeHeight)
-    })
-
-    // Helper to find intersection of line with rectangle boundary
-    const getNodeBoundaryPoint = (
-      node: SimNode,
-      otherX: number,
-      otherY: number,
-      extraPadding: number = 0
-    ): [number, number] => {
-      const cx = node.x!
-      const cy = node.y!
-      const w = (node.width || 80) / 2 + 4 + extraPadding // half width + padding + arrow space
-      const h = (node.height || 32) / 2 + 4 + extraPadding // half height + padding + arrow space
-
-      const dx = otherX - cx
-      const dy = otherY - cy
-
-      if (dx === 0 && dy === 0) return [cx, cy]
-
-      // Find intersection with rectangle
-      const absDx = Math.abs(dx)
-      const absDy = Math.abs(dy)
-
-      let scale: number
-      if (absDx * h > absDy * w) {
-        // Intersects left or right edge
-        scale = w / absDx
+      if (sim.alpha() > sim.alphaMin()) {
+        animRef.current = requestAnimationFrame(tick)
       } else {
-        // Intersects top or bottom edge
-        scale = h / absDy
+        running = false
+        fitView({ duration: 300, padding: 0.2 })
       }
-
-      return [cx + dx * scale, cy + dy * scale]
     }
 
-    // Helper to compute control point for quadratic curve
-    const getControlPoint = (
-      sx: number, sy: number, 
-      tx: number, ty: number, 
-      offset: number
-    ): [number, number] => {
-      const mx = (sx + tx) / 2
-      const my = (sy + ty) / 2
-      // Perpendicular offset
-      const dx = tx - sx
-      const dy = ty - sy
-      const len = Math.sqrt(dx * dx + dy * dy) || 1
-      const nx = -dy / len
-      const ny = dx / len
-      return [mx + nx * offset, my + ny * offset]
-    }
-
-    // Animation tick
-    simulation.on('tick', () => {
-      link.attr('d', (d) => {
-        const source = d.source as SimNode
-        const target = d.target as SimNode
-        const offset = d.curveOffset || 0
-        
-        if (offset === 0) {
-          // Straight line: boundary to boundary
-          const [x1, y1] = getNodeBoundaryPoint(source, target.x!, target.y!)
-          const [x2, y2] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
-          return `M ${x1} ${y1} L ${x2} ${y2}`
-        } else {
-          // Curved line: compute control point and adjust boundaries
-          const [cx, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
-          
-          // For source boundary, aim toward control point
-          const [x1, y1] = getNodeBoundaryPoint(source, cx, cy, 2)
-          
-          // For target boundary, compute where the curve actually arrives from
-          // At the end of a quadratic bezier Q(cx,cy,x2,y2), the tangent is from control point to end
-          // So the arrow should point from control point direction
-          const [x2, y2] = getNodeBoundaryPoint(target, cx, cy, -3)
-          
-          return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
-        }
-      })
-
-      edgeLabel
-        .attr('x', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          const offset = d.curveOffset || 0
-          const [cx] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
-          // For quadratic bezier, midpoint is at t=0.5: (1-t)^2*P0 + 2*(1-t)*t*P1 + t^2*P2
-          // Simplified: 0.25*sx + 0.5*cx + 0.25*tx
-          return 0.25 * source.x! + 0.5 * cx + 0.25 * target.x!
-        })
-        .attr('y', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          const offset = d.curveOffset || 0
-          const [, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
-          return 0.25 * source.y! + 0.5 * cy + 0.25 * target.y! - 8
-        })
-
-      node.attr('transform', (d) => `translate(${d.x},${d.y})`)
-    })
+    animRef.current = requestAnimationFrame(tick)
 
     return () => {
-      simulation.stop()
+      running = false
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+      sim.stop()
     }
-  }, [nodes, triples, highlightTripleId, width, height, getLayerTargetX])
+  }, [
+    initialized,
+    nodeKey,
+    tripleKey,
+    ontologyNodes,
+    triples,
+    width,
+    height,
+    getLayerTargetX,
+    getRFNodes,
+    setNodes,
+    fitView,
+  ])
 
-  // Center on highlighted edge when it changes
+  // Center on highlighted edge
   useEffect(() => {
-    if (!highlightTripleId || !svgRef.current || !zoomRef.current) return
-
+    if (!highlightTripleId) return
     const triple = triples.find((t) => t.id === highlightTripleId)
     if (!triple) return
-
-    // Wait for simulation to settle a bit
     const timer = setTimeout(() => {
-      const sourceNode = simNodesRef.current.find((n) => n.id === triple.subjectId)
-      const targetNode = simNodesRef.current.find((n) => n.id === triple.objectId)
-
-      if (!sourceNode?.x || !targetNode?.x || !sourceNode?.y || !targetNode?.y) return
-
-      // Calculate center of the edge
-      const centerX = (sourceNode.x + targetNode.x) / 2
-      const centerY = (sourceNode.y + targetNode.y) / 2
-
-      // Calculate transform to center on this point
-      const svg = d3.select(svgRef.current!)
-      const zoom = zoomRef.current!
-      
-      const scale = 1.2 // Zoom in slightly when centering
-      const transform = d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(scale)
-        .translate(-centerX, -centerY)
-
-      svg.transition()
-        .duration(500)
-        .ease(d3.easeCubicOut)
-        .call(zoom.transform, transform)
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [highlightTripleId, triples, width, height])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (simulationRef.current) {
-        simulationRef.current.stop()
-        simulationRef.current = null
+      const rfNodes = getRFNodes()
+      const src = rfNodes.find((n) => n.id === triple.subjectId)
+      const tgt = rfNodes.find((n) => n.id === triple.objectId)
+      if (src && tgt) {
+        fitView({ duration: 400, padding: 0.3, nodes: [src, tgt] })
       }
-    }
-  }, [])
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [highlightTripleId, triples, getRFNodes, fitView])
 
   return (
-    <svg
-      ref={svgRef}
-      width={width}
-      height={height}
-      className="cursor-grab bg-background active:cursor-grabbing"
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      connectionLineType={ConnectionLineType.SmoothStep}
+      proOptions={{ hideAttribution: true }}
+      fitView
+      fitViewOptions={{ padding: 0.3 }}
+      nodesDraggable={true}
+      nodesConnectable={false}
+      elementsSelectable={false}
+      panOnScroll={true}
+      minZoom={0.3}
+      maxZoom={3}
+      className="bg-background"
     />
+  )
+}
+
+export function ForceGraph(props: ForceGraphProps) {
+  return (
+    <div style={{ width: props.width, height: props.height }}>
+      <ReactFlowProvider>
+        <FlowInner {...props} />
+      </ReactFlowProvider>
+    </div>
   )
 }

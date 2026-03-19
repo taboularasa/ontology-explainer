@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+@keyframes edgeDashFlow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
