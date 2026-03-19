@@ -75,7 +75,6 @@ export function ForceGraph({
 
     // Calculate curve offsets for edges between same node pairs
     const edgePairCounts = new Map<string, number>()
-    const edgePairIndices = new Map<string, number>()
     
     triples.forEach((t) => {
       // Create a canonical key for node pair (sorted to handle both directions)
@@ -86,14 +85,15 @@ export function ForceGraph({
     const simLinks: SimLink[] = triples.map((t) => {
       const pairKey = [t.subjectId, t.objectId].sort().join('--')
       const totalEdges = edgePairCounts.get(pairKey) || 1
-      const currentIndex = edgePairIndices.get(pairKey) || 0
-      edgePairIndices.set(pairKey, currentIndex + 1)
       
-      // Calculate offset: 0 for single edges, -30/+30 for pairs, etc.
+      // Calculate offset based on edge direction
+      // Edges in opposite directions should curve in opposite directions
       let curveOffset = 0
       if (totalEdges > 1) {
-        const spacing = 40
-        curveOffset = (currentIndex - (totalEdges - 1) / 2) * spacing
+        const spacing = 35
+        // Determine direction: if source < target alphabetically, curve positive, else negative
+        const isForward = t.subjectId < t.objectId
+        curveOffset = isForward ? spacing : -spacing
       }
       
       return {
