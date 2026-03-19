@@ -81,9 +81,9 @@ export function OntologyApplication() {
   const typeConfig = stepTypeConfig[currentStepData.type]
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Main content area */}
-      <div className="flex flex-1 gap-4 overflow-hidden">
+    <div className="flex h-full flex-col overflow-auto">
+      {/* Main content area - fixed height panels */}
+      <div className="flex gap-4" style={{ height: 'clamp(200px, 40vh, 360px)' }}>
         {/* Left panel: Source / Before */}
         <div className="flex w-1/2 flex-col">
           <div className="mb-2 flex items-center gap-2">
@@ -91,7 +91,7 @@ export function OntologyApplication() {
               {currentStepData.type === 'documentation' ? 'Source Code' : 'Before / Source'}
             </span>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1">
             <SourceDrawer source={currentStepData.source} />
           </div>
         </div>
@@ -103,7 +103,7 @@ export function OntologyApplication() {
               {currentStepData.type === 'documentation' ? 'Generated Documentation' : 'After / Output'}
             </span>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1">
             <SourceDrawer source={currentStepData.output} />
           </div>
         </div>
