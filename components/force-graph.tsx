@@ -141,7 +141,7 @@ export function ForceGraph({
           .append('marker')
           .attr('id', `arrow-${layer}`)
           .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 10)
+          .attr('refX', 1)
           .attr('refY', 0)
           .attr('markerWidth', 6)
           .attr('markerHeight', 6)
@@ -155,7 +155,7 @@ export function ForceGraph({
           .append('marker')
           .attr('id', `arrow-${layer}-highlight`)
           .attr('viewBox', '0 -5 10 10')
-          .attr('refX', 10)
+          .attr('refX', 1)
           .attr('refY', 0)
           .attr('markerWidth', 8)
           .attr('markerHeight', 8)
@@ -312,12 +312,13 @@ export function ForceGraph({
     const getNodeBoundaryPoint = (
       node: SimNode,
       otherX: number,
-      otherY: number
+      otherY: number,
+      extraPadding: number = 0
     ): [number, number] => {
       const cx = node.x!
       const cy = node.y!
-      const w = (node.width || 80) / 2 + 4 // half width + padding
-      const h = (node.height || 32) / 2 + 4 // half height + padding
+      const w = (node.width || 80) / 2 + 4 + extraPadding // half width + padding + arrow space
+      const h = (node.height || 32) / 2 + 4 + extraPadding // half height + padding + arrow space
 
       const dx = otherX - cx
       const dy = otherY - cy
@@ -358,13 +359,14 @@ export function ForceGraph({
         .attr('x2', (d) => {
           const source = d.source as SimNode
           const target = d.target as SimNode
-          const [x] = getNodeBoundaryPoint(target, source.x!, source.y!)
+          // Add extra padding for arrow head (marker extends ~5px past line end)
+          const [x] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
           return x
         })
         .attr('y2', (d) => {
           const source = d.source as SimNode
           const target = d.target as SimNode
-          const [, y] = getNodeBoundaryPoint(target, source.x!, source.y!)
+          const [, y] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
           return y
         })
 
