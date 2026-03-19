@@ -135,6 +135,13 @@ function OntologyEdgeComponent({
     edgePath = `M ${sx} ${sy} L ${tx} ${ty}`
     labelX = (sx + tx) / 2
     labelY = (sy + ty) / 2
+
+    // Push label perpendicular to the edge so it doesn't sit on the line
+    const pathDx = tx - sx
+    const pathDy = ty - sy
+    const pathLen = Math.sqrt(pathDx * pathDx + pathDy * pathDy) || 1
+    labelX += (-pathDy / pathLen) * 12
+    labelY += (pathDx / pathLen) * 12
   } else {
     const mx = (sourceCenter.x + targetCenter.x) / 2
     const my = (sourceCenter.y + targetCenter.y) / 2
@@ -170,14 +177,16 @@ function OntologyEdgeComponent({
           style={{
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            zIndex: 10,
             fontSize: highlighted ? 12 : 10,
             fontFamily: 'var(--font-mono)',
             color: colors.text,
             fontWeight: highlighted ? 600 : 400,
-            opacity: highlighted ? 1 : 0.7,
+            opacity: highlighted ? 1 : 0.8,
             backgroundColor: 'var(--background)',
-            padding: '1px 4px',
-            borderRadius: 3,
+            padding: '1px 6px',
+            borderRadius: 4,
+            border: `1px solid ${colors.stroke}30`,
             whiteSpace: 'nowrap',
           }}
         >
