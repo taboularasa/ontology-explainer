@@ -28,46 +28,48 @@ export function SourceDrawer({ source }: SourceDrawerProps) {
       </div>
 
       {/* Code content */}
-      <div className="flex-1 overflow-auto">
-        <pre className="p-0 text-sm">
-          <code>
-            {lines.map((line, index) => {
-              const lineNumber = index + 1
-              const isHighlighted =
-                lineNumber >= highlightStart && lineNumber <= highlightEnd
+      <div className="flex-1 overflow-y-auto">
+        <div className="overflow-x-auto">
+          <pre className="min-w-max p-0 text-sm">
+            <code>
+              {lines.map((line, index) => {
+                const lineNumber = index + 1
+                const isHighlighted =
+                  lineNumber >= highlightStart && lineNumber <= highlightEnd
 
-              return (
-                <div
-                  key={index}
-                  className={`flex transition-colors duration-300 ${
-                    isHighlighted
-                      ? 'bg-amber-100 dark:bg-amber-900/30'
-                      : 'hover:bg-muted/50'
-                  }`}
-                >
-                  <span
-                    className={`w-10 shrink-0 select-none px-2 py-0.5 text-right font-mono text-xs ${
+                return (
+                  <div
+                    key={index}
+                    className={`flex transition-colors duration-300 ${
                       isHighlighted
-                        ? 'bg-amber-200/50 text-amber-700 dark:bg-amber-800/30 dark:text-amber-400'
-                        : 'text-muted-foreground'
+                        ? 'bg-amber-100 dark:bg-amber-900/30'
+                        : 'hover:bg-muted/50'
                     }`}
                   >
-                    {lineNumber}
-                  </span>
-                  <span
-                    className={`flex-1 whitespace-pre-wrap break-words px-3 py-0.5 font-mono ${
-                      isHighlighted
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {line || ' '}
-                  </span>
-                </div>
-              )
-            })}
-          </code>
-        </pre>
+                    <span
+                      className={`sticky left-0 w-10 shrink-0 select-none px-2 py-0.5 text-right font-mono text-xs ${
+                        isHighlighted
+                          ? 'bg-amber-200/50 text-amber-700 dark:bg-amber-800/30 dark:text-amber-400'
+                          : 'bg-card text-muted-foreground'
+                      }`}
+                    >
+                      {lineNumber}
+                    </span>
+                    <span
+                      className={`whitespace-pre px-3 py-0.5 font-mono ${
+                        isHighlighted
+                          ? 'text-foreground'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {line || ' '}
+                    </span>
+                  </div>
+                )
+              })}
+            </code>
+          </pre>
+        </div>
       </div>
 
       {/* Footer hint */}

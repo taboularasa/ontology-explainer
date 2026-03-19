@@ -86,8 +86,8 @@ export function OntologyExplainer() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="mx-auto max-w-7xl">
+      <header className="border-b border-border px-4 py-4">
+        <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Multi-Layer Ontology Explainer
           </h1>
@@ -98,8 +98,8 @@ export function OntologyExplainer() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden px-6 py-6">
-        <div className="mx-auto flex h-full max-w-7xl gap-6">
+      <main className="flex-1 overflow-hidden px-4 py-4">
+        <div className="flex h-full gap-4">
           {/* Left: Graph and controls */}
           <div className={`flex flex-col transition-all duration-300 ${drawerOpen ? 'flex-1' : 'w-full'}`}>
             {/* Graph container */}
@@ -274,7 +274,7 @@ export function OntologyExplainer() {
           {/* Right: Source drawer */}
           <div
             className={`shrink-0 transition-all duration-300 ${
-              drawerOpen ? 'w-96 opacity-100' : 'w-0 overflow-hidden opacity-0'
+              drawerOpen ? 'w-[28rem] opacity-100' : 'w-0 overflow-hidden opacity-0'
             }`}
           >
             {drawerOpen && currentStepData.source && (
