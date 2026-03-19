@@ -132,7 +132,7 @@ export function OntologyExplainer() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden px-4 py-4">
+      <main className="relative flex-1 overflow-hidden px-4 py-4">
         {activeTab === 'apply' ? (
           <OntologyApplication />
         ) : (

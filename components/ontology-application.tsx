@@ -81,35 +81,35 @@ export function OntologyApplication() {
   const typeConfig = stepTypeConfig[currentStepData.type]
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="absolute inset-0 flex flex-col">
       {/* Main content area - fills available space */}
       <div className="flex min-h-0 flex-1 gap-4">
         {/* Left panel: Source / Before */}
         <div className="flex w-1/2 flex-col">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex shrink-0 items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {currentStepData.type === 'documentation' ? 'Source Code' : 'Before / Source'}
             </span>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <SourceDrawer source={currentStepData.source} />
           </div>
         </div>
 
         {/* Right panel: Output / After */}
         <div className="flex w-1/2 flex-col">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex shrink-0 items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {currentStepData.type === 'documentation' ? 'Generated Documentation' : 'After / Output'}
             </span>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <SourceDrawer source={currentStepData.output} />
           </div>
         </div>
       </div>
 
-      {/* Controls and explanation - sticky at bottom */}
+      {/* Controls and explanation - fixed at bottom */}
       <div className="mt-4 shrink-0 rounded-lg border border-border bg-card p-4">
         {/* Progress bar */}
         <div className="mb-3 flex items-center gap-2">
