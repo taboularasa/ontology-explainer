@@ -19,6 +19,7 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
   predicate: string
   layer: Layer
   isNew?: boolean
+  curveOffset?: number // offset for curved paths when multiple edges between same nodes
 }
 
 interface ForceGraphProps {
@@ -72,14 +73,39 @@ export function ForceGraph({
       isNew: !prevNodesRef.current.has(n.id),
     }))
 
-    const simLinks: SimLink[] = triples.map((t) => ({
-      id: t.id,
-      source: t.subjectId,
-      target: t.objectId,
-      predicate: t.predicate,
-      layer: t.layer,
-      isNew: !prevLinksRef.current.has(t.id),
-    }))
+    // Calculate curve offsets for edges between same node pairs
+    const edgePairCounts = new Map<string, number>()
+    const edgePairIndices = new Map<string, number>()
+    
+    triples.forEach((t) => {
+      // Create a canonical key for node pair (sorted to handle both directions)
+      const pairKey = [t.subjectId, t.objectId].sort().join('--')
+      edgePairCounts.set(pairKey, (edgePairCounts.get(pairKey) || 0) + 1)
+    })
+
+    const simLinks: SimLink[] = triples.map((t) => {
+      const pairKey = [t.subjectId, t.objectId].sort().join('--')
+      const totalEdges = edgePairCounts.get(pairKey) || 1
+      const currentIndex = edgePairIndices.get(pairKey) || 0
+      edgePairIndices.set(pairKey, currentIndex + 1)
+      
+      // Calculate offset: 0 for single edges, -30/+30 for pairs, etc.
+      let curveOffset = 0
+      if (totalEdges > 1) {
+        const spacing = 40
+        curveOffset = (currentIndex - (totalEdges - 1) / 2) * spacing
+      }
+      
+      return {
+        id: t.id,
+        source: t.subjectId,
+        target: t.objectId,
+        predicate: t.predicate,
+        layer: t.layer,
+        isNew: !prevLinksRef.current.has(t.id),
+        curveOffset,
+      }
+    })
 
     // Update previous sets
     prevNodesRef.current = new Set(nodes.map((n) => n.id))
@@ -205,11 +231,12 @@ export function ForceGraph({
     const labelGroup = g.append('g').attr('class', 'labels')
     const nodeGroup = g.append('g').attr('class', 'nodes')
 
-    // Draw links
+    // Draw links as curved paths
     const link = linkGroup
-      .selectAll('line')
+      .selectAll('path')
       .data(simLinks)
-      .join('line')
+      .join('path')
+      .attr('fill', 'none')
       .attr('stroke', (d) => layerColors[d.layer].stroke)
       .attr('stroke-width', (d) => (d.id === highlightTripleId ? 3 : 1.5))
       .attr('stroke-opacity', (d) => (d.id === highlightTripleId ? 1 : 0.6))
@@ -341,38 +368,63 @@ export function ForceGraph({
       return [cx + dx * scale, cy + dy * scale]
     }
 
+    // Helper to compute control point for quadratic curve
+    const getControlPoint = (
+      sx: number, sy: number, 
+      tx: number, ty: number, 
+      offset: number
+    ): [number, number] => {
+      const mx = (sx + tx) / 2
+      const my = (sy + ty) / 2
+      // Perpendicular offset
+      const dx = tx - sx
+      const dy = ty - sy
+      const len = Math.sqrt(dx * dx + dy * dy) || 1
+      const nx = -dy / len
+      const ny = dx / len
+      return [mx + nx * offset, my + ny * offset]
+    }
+
     // Animation tick
     simulation.on('tick', () => {
-      link
-        .attr('x1', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          const [x] = getNodeBoundaryPoint(source, target.x!, target.y!)
-          return x
-        })
-        .attr('y1', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          const [, y] = getNodeBoundaryPoint(source, target.x!, target.y!)
-          return y
-        })
-        .attr('x2', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          // Add extra padding for arrow head (marker extends ~5px past line end)
-          const [x] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
-          return x
-        })
-        .attr('y2', (d) => {
-          const source = d.source as SimNode
-          const target = d.target as SimNode
-          const [, y] = getNodeBoundaryPoint(target, source.x!, source.y!, -5)
-          return y
-        })
+      link.attr('d', (d) => {
+        const source = d.source as SimNode
+        const target = d.target as SimNode
+        const offset = d.curveOffset || 0
+        
+        // Get boundary points (use center for control point calculation)
+        const [cx, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
+        
+        // Calculate boundary points toward control point for curved path
+        const [x1, y1] = getNodeBoundaryPoint(source, cx, cy)
+        const [x2, y2] = getNodeBoundaryPoint(target, cx, cy, -5)
+        
+        if (offset === 0) {
+          // Straight line for single edges
+          return `M ${x1} ${y1} L ${x2} ${y2}`
+        } else {
+          // Quadratic bezier for multiple edges
+          return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
+        }
+      })
 
       edgeLabel
-        .attr('x', (d) => ((d.source as SimNode).x! + (d.target as SimNode).x!) / 2)
-        .attr('y', (d) => ((d.source as SimNode).y! + (d.target as SimNode).y!) / 2)
+        .attr('x', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const offset = d.curveOffset || 0
+          const [cx] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
+          // For quadratic bezier, midpoint is at t=0.5: (1-t)^2*P0 + 2*(1-t)*t*P1 + t^2*P2
+          // Simplified: 0.25*sx + 0.5*cx + 0.25*tx
+          return 0.25 * source.x! + 0.5 * cx + 0.25 * target.x!
+        })
+        .attr('y', (d) => {
+          const source = d.source as SimNode
+          const target = d.target as SimNode
+          const offset = d.curveOffset || 0
+          const [, cy] = getControlPoint(source.x!, source.y!, target.x!, target.y!, offset)
+          return 0.25 * source.y! + 0.5 * cy + 0.25 * target.y! - 8
+        })
 
       node.attr('transform', (d) => `translate(${d.x},${d.y})`)
     })
