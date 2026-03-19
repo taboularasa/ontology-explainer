@@ -90,24 +90,27 @@ function OntologyEdgeComponent({
   const sourceCenter = getNodeCenter(sourceNode)
   const targetCenter = getNodeCenter(targetNode)
 
-  // For parallel edges, offset the "aim point" perpendicularly so each edge
-  // connects at a different spot on the node boundary
-  const spacing = 50
+  // Use a canonical direction (sorted by node ID) for the perpendicular so
+  // that edges in opposite directions between the same pair curve consistently
+  // in opposite directions rather than cancelling out.
+  const canonicalFlip = source < target ? 1 : -1
+  const dx = targetCenter.x - sourceCenter.x
+  const dy = targetCenter.y - sourceCenter.y
+  const edgeLen = Math.sqrt(dx * dx + dy * dy) || 1
+  const nx = (-dy / edgeLen) * canonicalFlip
+  const ny = (dx / edgeLen) * canonicalFlip
+
   let offset = 0
   if (totalParallelEdges > 1) {
     const center = (totalParallelEdges - 1) / 2
-    offset = (edgeIndex - center) * spacing
+    const baseOffset = Math.max(edgeLen * 0.3, 60)
+    offset = (edgeIndex - center) * baseOffset
   }
 
   let sourceAim = targetCenter
   let targetAim = sourceCenter
 
   if (offset !== 0) {
-    const dx = targetCenter.x - sourceCenter.x
-    const dy = targetCenter.y - sourceCenter.y
-    const len = Math.sqrt(dx * dx + dy * dy) || 1
-    const nx = -dy / len
-    const ny = dx / len
     const mx = (sourceCenter.x + targetCenter.x) / 2 + nx * offset
     const my = (sourceCenter.y + targetCenter.y) / 2 + ny * offset
     sourceAim = { x: mx, y: my }
@@ -133,11 +136,6 @@ function OntologyEdgeComponent({
     labelX = (sx + tx) / 2
     labelY = (sy + ty) / 2
   } else {
-    const dx = targetCenter.x - sourceCenter.x
-    const dy = targetCenter.y - sourceCenter.y
-    const len = Math.sqrt(dx * dx + dy * dy) || 1
-    const nx = -dy / len
-    const ny = dx / len
     const mx = (sourceCenter.x + targetCenter.x) / 2
     const my = (sourceCenter.y + targetCenter.y) / 2
     const cx = mx + nx * offset
