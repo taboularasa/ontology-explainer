@@ -11,8 +11,8 @@ export function SourceDrawer({ source }: SourceDrawerProps) {
   const lines = source.content.split('\n')
   const [highlightStart, highlightEnd] = source.highlightLines
 
-  const Icon = source.type === 'python' ? FileCode2 : FileText
-  const langLabel = source.type === 'python' ? 'Python' : 'Markdown'
+  const Icon = source.type === 'markdown' ? FileText : FileCode2
+  const langLabel = source.type === 'python' ? 'Python' : source.type === 'turtle' ? 'OWL / Turtle' : 'Markdown'
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">

@@ -15,7 +15,7 @@ export interface Triple {
 }
 
 export interface SourceContent {
-  type: 'markdown' | 'python'
+  type: 'markdown' | 'python' | 'turtle'
   filename: string
   content: string
   highlightLines: [number, number] // [start, end] 1-indexed
@@ -207,6 +207,46 @@ Teaches clerks to handle bulk items correctly.
 Quiz on container identification
 Hands-on tare demonstration`
 
+export const axiomsTurtle = `@prefix : <http://example.org/weighing#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Constraint: Reusable containers require taring
+:ReusableContainer rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :requires ;
+    owl:someValuesFrom :TareStep
+] .
+
+# Constraint: Tare must precede weigh-and-price
+:TareStep rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :precedes ;
+    owl:someValuesFrom :WeighAndPriceStep
+] .
+
+# Cross-layer: SOP steps must have an implementation
+:SOPStep rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :implementedBy ;
+    owl:minCardinality 1
+] .
+
+# Cross-layer: Implementation must produce output
+:POSFunction rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :produces ;
+    owl:someValuesFrom :MeasuredValue
+] .
+
+# Cross-layer: Steps requiring capability must
+# have a training module that teaches it
+:Capability rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty [ owl:inverseOf :teaches ] ;
+    owl:someValuesFrom :TrainingModule
+] .`
+
 // Step sequence with explanations and source references
 export const steps: Step[] = [
   {
@@ -340,6 +380,28 @@ export const steps: Step[] = [
       filename: 'training-bulk.md',
       content: trainingMarkdown,
       highlightLines: [8, 10],
+    },
+  },
+  {
+    tripleId: 't13',
+    title: 'From Triples to Axioms',
+    description: 'Triples describe what exists. Axioms describe what must be true. We can formalize the constraints we discovered -- like "reusable containers require taring" -- as OWL axioms that a reasoner can check automatically.',
+    source: {
+      type: 'turtle',
+      filename: 'weighing-ontology.ttl',
+      content: axiomsTurtle,
+      highlightLines: [1, 16],
+    },
+  },
+  {
+    tripleId: 't13',
+    title: 'Cross-Layer Axioms',
+    description: 'The most powerful axioms span layers. An SOP step must have a software implementation. A software function that implements a step must not be removed while the step exists. These are the rules the reasoner checks in the Apply tab.',
+    source: {
+      type: 'turtle',
+      filename: 'weighing-ontology.ttl',
+      content: axiomsTurtle,
+      highlightLines: [18, 38],
     },
   },
 ]
