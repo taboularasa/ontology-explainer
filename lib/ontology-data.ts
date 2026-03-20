@@ -42,7 +42,6 @@ export const nodes: OntologyNode[] = [
   { id: 'pos-tare', label: 'POS Tare Function', layer: 'software' },
   { id: 'net-weight', label: 'NetWeight', layer: 'software' },
   { id: 'scale', label: 'Scale', layer: 'software' },
-  { id: 'reading', label: 'Reading', layer: 'software' },
   
   // Training Layer
   { id: 'can-tare', label: 'CanTareScale', layer: 'training' },
@@ -106,9 +105,9 @@ export const triples: Triple[] = [
   },
   {
     id: 't8',
-    subjectId: 'scale',
-    predicate: 'produces',
-    objectId: 'reading',
+    subjectId: 'pos-tare',
+    predicate: 'readsFrom',
+    objectId: 'scale',
     layer: 'software',
   },
   {
@@ -290,12 +289,12 @@ export const steps: Step[] = [
   {
     tripleId: 't8',
     title: 'Hardware Dependencies',
-    description: 'The ontology also captures physical dependencies. The tare function cannot work without a scale sensor -- if the hardware changes, the ontology traces the impact through software and back to the SOP.',
+    description: 'The tare function reads from a physical scale sensor. The ontology captures this hardware dependency -- if the scale interface changes, we can trace the impact through software back to the SOP.',
     source: {
       type: 'python',
       filename: 'pos_scale.py',
       content: softwarePython,
-      highlightLines: [3, 6],
+      highlightLines: [10, 11],
     },
   },
   {
