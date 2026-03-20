@@ -23,6 +23,7 @@ export interface SourceContent {
 
 export interface Step {
   tripleId: string
+  extraTripleIds?: string[]
   title: string
   description: string
   source: SourceContent
@@ -267,12 +268,12 @@ export const steps: Step[] = [
   {
     tripleId: 't6',
     title: 'From Process to Software',
-    description: 'Now we cross into the Software layer. The SOP tare step is implemented by a specific POS function.',
+    description: 'This is where single-document modeling would stop. The ontology keeps going -- linking the SOP step to the specific function that implements it. This cross-layer connection is what makes the ontology valuable.',
     source: {
       type: 'python',
       filename: 'pos_scale.py',
       content: softwarePython,
-      highlightLines: [9, 13],
+      highlightLines: [8, 13],
     },
   },
   {
@@ -288,13 +289,13 @@ export const steps: Step[] = [
   },
   {
     tripleId: 't8',
-    title: 'Hardware Input',
-    description: 'The physical scale produces a reading (gross weight). This is raw sensor data.',
+    title: 'Hardware Dependencies',
+    description: 'The ontology also captures physical dependencies. The tare function cannot work without a scale sensor -- if the hardware changes, the ontology traces the impact through software and back to the SOP.',
     source: {
       type: 'python',
       filename: 'pos_scale.py',
       content: softwarePython,
-      highlightLines: [3, 7],
+      highlightLines: [3, 6],
     },
   },
   {
@@ -311,45 +312,35 @@ export const steps: Step[] = [
   {
     tripleId: 't10',
     title: 'Skills Required',
-    description: 'Now the Training layer. Performing the tare step requires the capability to operate the scale\'s tare function.',
+    description: 'Now the Training layer. Performing the tare step requires the capability to operate the scale -- this links a process step to the human skill needed to execute it.',
     source: {
       type: 'markdown',
       filename: 'training-bulk.md',
       content: trainingMarkdown,
-      highlightLines: [14, 17],
-    },
-  },
-  {
-    tripleId: 't11',
-    title: 'How Skills Are Acquired',
-    description: 'A training module teaches the tare capability. This links formal training to required skills.',
-    source: {
-      type: 'markdown',
-      filename: 'training-bulk.md',
-      content: trainingMarkdown,
-      highlightLines: [1, 5],
+      highlightLines: [12, 15],
     },
   },
   {
     tripleId: 't12',
-    title: 'Another Taught Skill',
-    description: 'The same training module also teaches container identification. Multiple capabilities from one source.',
+    extraTripleIds: ['t11'],
+    title: 'One Module, Multiple Capabilities',
+    description: 'A single training module teaches both the tare skill and container identification. The ontology captures this one-to-many relationship -- if the module changes, we know exactly which capabilities are affected.',
     source: {
       type: 'markdown',
       filename: 'training-bulk.md',
       content: trainingMarkdown,
-      highlightLines: [9, 11],
+      highlightLines: [1, 10],
     },
   },
   {
     tripleId: 't13',
-    title: 'Capability Enables Detection',
-    description: 'The ability to identify containers enables detecting reusable ones. This closes the loop back to the SOP layer.',
+    title: 'Closing the Loop',
+    description: 'The ability to identify containers feeds back to the SOP layer -- detecting reusable containers is what triggers the tare step in the first place. This cross-layer cycle means a change to container policy ripples through training, software, and process.',
     source: {
       type: 'markdown',
       filename: 'training-bulk.md',
       content: trainingMarkdown,
-      highlightLines: [9, 11],
+      highlightLines: [8, 10],
     },
   },
 ]
@@ -381,8 +372,12 @@ export const layerLabels: Record<Layer, string> = {
 
 // Helper to get visible nodes and edges at a given step
 export function getVisibleData(stepIndex: number) {
-  const visibleTripleIds = steps.slice(0, stepIndex + 1).map(s => s.tripleId)
-  const visibleTriples = triples.filter(t => visibleTripleIds.includes(t.id))
+  const visibleTripleIds = new Set<string>()
+  steps.slice(0, stepIndex + 1).forEach(s => {
+    visibleTripleIds.add(s.tripleId)
+    s.extraTripleIds?.forEach(id => visibleTripleIds.add(id))
+  })
+  const visibleTriples = triples.filter(t => visibleTripleIds.has(t.id))
   
   const visibleNodeIds = new Set<string>()
   visibleTriples.forEach(t => {
